@@ -1,10 +1,5 @@
-import cv2
-import math
 import habitat_sim
-import magnum as mn
-import numpy as np
 
-from typing import Union
 
 def place_agent(sim):
     agent_state = habitat_sim.AgentState()
