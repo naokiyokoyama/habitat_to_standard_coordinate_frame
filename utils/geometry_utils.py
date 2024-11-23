@@ -5,49 +5,73 @@ import math
 from typing import Union
 
 
-def convert_conventions(
-    mat_or_vec: Union[mn.Matrix4, mn.Vector3], reverse: bool = False, perm=None
-) -> mn.Matrix4:
+def apply_permutation(
+    mat_or_vec: Union[mn.Matrix4, mn.Vector3], perm: mn.Matrix3x3, reverse: bool = False
+) -> Union[mn.Matrix4, mn.Vector3]:
     """
-    Convert a Matrix4 from Habitat convention (x=right, y=up, z=backwards)
+    Applies a permutation transformation to either a 3D vector or a 4x4 transformation
+    matrix.
+
+    For vectors, this performs a simple permutation transformation. For matrices, it
+    performs a similarity transformation that preserves the matrix's properties while
+    permuting its coordinate system.
+
+    Args:
+        mat_or_vec (Union[mn.Matrix4, mn.Vector3]): The input to transform, either a 4x4
+            transformation matrix or a 3D vector
+        perm (mn.Matrix3x3): The 3x3 permutation matrix to apply
+        reverse (bool, optional): If True, applies the inverse permutation by
+            transposing the permutation matrix. Defaults to False.
+
+    Returns:
+        Union[mn.Matrix4, mn.Vector3]: If the input is a Matrix4, returns a new Matrix4
+        with the permutation applied as a similarity transformation. If the input is a
+        Vector3, returns the permuted Vector3.
+
+    Notes:
+        - For matrix inputs, applies a similarity transformation of the form P*M*P^T
+        - Uses the property that for orthonormal matrices (like permutation matrices),
+          the transpose equals the inverse
+    """
+    if reverse:
+        perm = perm.transposed()
+
+    if isinstance(mat_or_vec, mn.Vector3):
+        return perm * mat_or_vec
+
+    return mn.Matrix4().from_(
+        rotation_scaling=perm @ mat_or_vec.rotation() @ perm.transposed(),
+        translation=perm * mat_or_vec.translation,
+    )
+
+
+def convert_conventions(
+    mat_or_vec: Union[mn.Matrix4, mn.Vector3], reverse: bool = False
+) -> Union[mn.Matrix4, mn.Vector3]:
+    """
+    Convert a Matrix4 or Vector3 from Habitat convention (x=right, y=up, z=backwards)
     to standard convention (x=forward, y=left, z=up), or vice versa.
 
     Args:
-        mat_or_vec: Magnum Matrix4 or Vector3 in Habitat convention (or standard)
-        reverse: If True, converts from standard to Habitat convention
+        mat_or_vec (Union[mn.Matrix4, mn.Vector3]): The input to convert, either a 4x4
+            transformation matrix or a 3D vector in the source coordinate system
+        reverse (bool, optional): If True, converts from standard to Habitat convention.
+            If False, converts from Habitat to standard convention. Defaults to False.
 
     Returns:
-        Matrix4 in standard or Habitat convention
+        Union[mn.Matrix4, mn.Vector3]: The converted matrix or vector in the target
+        coordinate system. Returns the same type as the input (Matrix4 or Vector3).
     """
-    if perm is None:
-        # Create permutation matrix
-        perm = mn.Matrix3x3(
-            np.array(
-                [
-                    [0.0, 0.0, -1.0],  # New x comes from negated old z
-                    [-1.0, 0.0, 0.0],  # New y comes from negated old x
-                    [0.0, 1.0, 0.0],  # New z comes from old y
-                ]
-            )
+    perm = mn.Matrix3x3(
+        np.array(
+            [
+                [0.0, 0.0, -1.0],  # New x comes from negated old z
+                [-1.0, 0.0, 0.0],  # New y comes from negated old x
+                [0.0, 1.0, 0.0],  # New z comes from old y
+            ]
         )
-
-    if isinstance(mat_or_vec, mn.Vector3):
-        if reverse:
-            perm = perm.transposed()
-        return perm * mat_or_vec
-
-    matrix_rotation = mat_or_vec.rotation()
-
-    # A.T == A_-1 when A is orthonormal. All rotation matrices are orthonormal.
-    if reverse:
-        rotation_scaling = perm.transposed() @ matrix_rotation.transposed()
-        perm = perm.transposed()
-    else:
-        rotation_scaling = matrix_rotation.transposed() @ perm.transposed()
-
-    return mn.Matrix4.from_(
-        rotation_scaling=rotation_scaling, translation=perm * mat_or_vec.translation
     )
+    return apply_permutation(mat_or_vec, perm, reverse)
 
 
 def rodrigues_rotation(
@@ -255,3 +279,31 @@ def generate_matrices():
             valid_matrices.append(matrix)
 
     return valid_matrices
+
+
+def generate_random_transform():
+    """
+    Generate a random 4x4 homogeneous transformation matrix.
+
+    Returns:
+        numpy.ndarray: A 4x4 homogeneous transformation matrix where:
+            - Top-left 3x3 is a random rotation matrix
+            - Top-right 3x1 is a random translation vector
+            - Bottom row is [0, 0, 0, 1] to maintain homogeneous form
+    """
+    # Generate a random 3x3 rotation matrix using QR decomposition
+    # This ensures the matrix is orthogonal (valid rotation)
+    random_matrix = np.random.rand(3, 3)
+    q, r = np.linalg.qr(random_matrix)
+    rotation = q * np.sign(np.diag(r))[:, None]  # Ensure determinant is 1
+
+    # Generate random translation vector
+    translation = np.random.uniform(-10, 10, (3, 1))
+
+    # Create the 4x4 homogeneous transformation matrix
+    transform = np.zeros((4, 4))
+    transform[:3, :3] = rotation
+    transform[:3, 3:] = translation
+    transform[3, 3] = 1.0
+
+    return transform
