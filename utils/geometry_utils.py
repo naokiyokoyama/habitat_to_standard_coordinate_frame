@@ -82,12 +82,7 @@ def set_robot_base_transform(robot_id, global_T_base_std: mn.Matrix4) -> None:
         robot_id: ID of the articulated robot object
         transform: Magnum Matrix4 in standard (non-Habitat) convention
     """
-    robot_forward_axis = np.array(global_T_base_std)[0, :3]  # rotation 1st row (x)
-    robot_local_roll = rodrigues_rotation(robot_forward_axis, -np.pi / 2)
-
-    # Apply the local rotation while preserving position
     global_T_base_raw_std = mn.Matrix4().from_(
-        # rotation_scaling=global_T_base_std.rotation() @ robot_local_roll,
         rotation_scaling=global_T_base_std.rotation(),
         translation=global_T_base_std.translation,
     )
@@ -107,17 +102,25 @@ def get_robot_base_transform(robot_id) -> mn.Matrix4:
         robot_id: ID of the articulated robot object
     """
     global_T_base_raw_std = convert_conventions(robot_id.transformation)
-    robot_forward_axis = np.array(global_T_base_raw_std)[0, :3]  # rotation 1st row (x)
-    robot_local_roll = rodrigues_rotation(robot_forward_axis, np.pi / 2)
-
-    # Apply the local rotation while preserving position
     global_T_base_std = mn.Matrix4().from_(
-        # rotation_scaling=global_T_base_raw_std.rotation() @ robot_local_roll,
         rotation_scaling=global_T_base_raw_std.rotation(),
         translation=global_T_base_raw_std.translation,
     )
 
     return global_T_base_std
+
+
+def get_ee_transform(robot_id) -> mn.Matrix4:
+    # TODO (START): Use habitat-lab SpotRobot to get global_T_ee_raw_hab
+    global_T_ee_raw_hab = robot_id.get_link_scene_node(7).transformation
+    global_T_ee_raw_hab.translation = global_T_ee_raw_hab.transform_point(
+        mn.Vector3(0.08, 0, 0)
+    )
+    # TODO (END): Use habitat-lab SpotRobot to get global_T_ee_raw_hab
+
+    global_T_ee_raw_std = convert_conventions(global_T_ee_raw_hab)
+    global_T_ee_std = global_T_ee_raw_std
+    return global_T_ee_std
 
 
 def extract_roll_pitch_yaw(matrix):

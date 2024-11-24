@@ -11,6 +11,7 @@ from utils.geometry_utils import (
     get_robot_base_transform,
     constrain_quaternion,
     generate_random_quaternion,
+    get_ee_transform,
 )
 from utils.sim_utils import load_robot, visualize_axes, make_configuration
 from utils.visualization_utils import add_text_to_image
@@ -67,6 +68,7 @@ def main(sim):
 
     goal_w, goal_v = generate_random_quaternion()
     offsets = [convert_conventions(s.translation) for s in spheres]
+    spheres_2 = visualize_axes(sim)
     while True:
         q_a = mn.Quaternion().from_matrix(get_robot_base_transform(robot).rotation())
         q_a = (q_a.scalar, np.array(q_a.vector))
@@ -76,12 +78,15 @@ def main(sim):
             mn.Vector3(),
         )
         set_robot_base_transform(robot, new_base_tf)
-        global_T_base_std = get_robot_base_transform(robot)
 
-        for sphere, offset in zip(spheres, offsets):
-            global_sphere_pos_std = global_T_base_std.transform_point(offset)
-            sphere.translation = convert_conventions(
-                global_sphere_pos_std, reverse=True
+        global_T_base_std = get_robot_base_transform(robot)
+        global_T_ee_std = get_ee_transform(robot)
+        for idx, offset in enumerate(offsets):
+            spheres[idx].translation = convert_conventions(
+                global_T_base_std.transform_point(offset), reverse=True
+            )
+            spheres_2[idx].translation = convert_conventions(
+                global_T_ee_std.transform_point(offset), reverse=True
             )
 
         img = sim.get_sensor_observations()["rgb_camera"]
