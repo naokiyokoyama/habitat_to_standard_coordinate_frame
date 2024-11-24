@@ -13,6 +13,7 @@ from utils.geometry_utils import (
     generate_random_quaternion,
     get_ee_transform,
     generate_circle_points,
+    extract_roll_pitch_yaw,
 )
 from utils.sim_utils import load_robot, visualize_axes, make_configuration
 from utils.visualization_utils import add_text_to_image
@@ -40,11 +41,12 @@ def main(sim):
     axes = np.eye(3)
     names = ["roll pitch yaw".split(), "xyz"]
     values = [
-        np.linspace(np.radians(-60), np.radians(60), 150),
+        np.linspace(np.radians(-60), np.radians(60), 300),
         np.linspace(-1.5, 1.5, 150),
     ]
     window_names = ["Roll Pitch Yaw test", "XYZ test"]
     for idx in range(2):
+        # for idx in range(0):
         for axis_idx in range(3):
             for val in values[idx]:
                 global_T_base_std = (
@@ -58,7 +60,8 @@ def main(sim):
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 unit = "degrees" if idx == 0 else "meters"
                 if idx == 0:
-                    val = np.degrees(val)
+                    rpy = extract_roll_pitch_yaw(global_T_base_std)
+                    val = np.degrees(rpy[axis_idx])
                 img_bgr = add_text_to_image(
                     img_bgr, f"{names[idx][axis_idx]}: {val:.2f} {unit}"
                 )
@@ -125,8 +128,7 @@ def main(sim):
             x = global_T_ee_std.inverted().transform_point(x)
             img_bgr = add_text_to_image(
                 img_bgr,
-                "Circle local xyz: "
-                f"{x[0]:.2f}, {x[1]:.2f}, {x[2]:.2f}",
+                "Circle local xyz: " f"{x[0]:.2f}, {x[1]:.2f}, {x[2]:.2f}",
             )
         cv2.imshow("ee test", img_bgr)
         k = cv2.waitKey(10)
@@ -135,9 +137,6 @@ def main(sim):
         if w == goal_w and np.array_equal(v, goal_v):
             goal_w, goal_v = generate_random_quaternion()
     cv2.destroyAllWindows()
-
-    # Final test: keep the robot base fixed at the origin, and move a sphere in a
-    # square in front of the end effector
 
 
 if __name__ == "__main__":

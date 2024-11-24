@@ -48,28 +48,6 @@ def convert_conventions(
     return mn.Matrix4(result)
 
 
-def rodrigues_rotation(
-    axis: Union[np.ndarray, mn.Vector3], rotation_rad: float
-) -> mn.Matrix3x3:
-    K = mn.Matrix3x3(
-        np.array(
-            [
-                [0, -axis[2], axis[1]],
-                [axis[2], 0, -axis[0]],
-                [-axis[1], axis[0], 0],
-            ]
-        )
-    )
-
-    # Create rotation matrix around local forward axis
-    cos_theta = np.cos(rotation_rad)
-    sin_theta = np.sin(rotation_rad)
-
-    rotation = mn.Matrix3x3.identity_init() + sin_theta * K + (1 - cos_theta) * K @ K
-
-    return rotation
-
-
 def set_robot_base_transform(robot_id, global_T_base_std: mn.Matrix4) -> None:
     """
     Sets the robot's base's transform to the input transform. The input transform
@@ -82,8 +60,17 @@ def set_robot_base_transform(robot_id, global_T_base_std: mn.Matrix4) -> None:
         robot_id: ID of the articulated robot object
         transform: Magnum Matrix4 in standard (non-Habitat) convention
     """
+    roll_offset = mn.Matrix3x3(
+        np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, -1.0],
+                [0.0, 1.0, 0.0],
+            ]
+        )
+    )
     global_T_base_raw_std = mn.Matrix4().from_(
-        rotation_scaling=global_T_base_std.rotation(),
+        rotation_scaling=global_T_base_std.rotation() @ roll_offset,
         translation=global_T_base_std.translation,
     )
     robot_id.transformation = convert_conventions(global_T_base_raw_std, reverse=True)
@@ -101,9 +88,18 @@ def get_robot_base_transform(robot_id) -> mn.Matrix4:
     Args:
         robot_id: ID of the articulated robot object
     """
+    roll_offset = mn.Matrix3x3(
+        np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, -1.0],
+                [0.0, 1.0, 0.0],
+            ]
+        ).T  # transposed for inverse
+    )
     global_T_base_raw_std = convert_conventions(robot_id.transformation)
     global_T_base_std = mn.Matrix4().from_(
-        rotation_scaling=global_T_base_raw_std.rotation(),
+        rotation_scaling=global_T_base_raw_std.rotation() @ roll_offset,
         translation=global_T_base_raw_std.translation,
     )
 
