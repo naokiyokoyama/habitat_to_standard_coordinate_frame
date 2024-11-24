@@ -5,48 +5,8 @@ import math
 from typing import Union
 
 
-def apply_permutation(
-    mat_or_vec: Union[mn.Matrix4, mn.Vector3], perm: mn.Matrix3x3, reverse: bool = False
-) -> Union[mn.Matrix4, mn.Vector3]:
-    """
-    Applies a permutation transformation to either a 3D vector or a 4x4 transformation
-    matrix.
-
-    For vectors, this performs a simple permutation transformation. For matrices, it
-    performs a similarity transformation that preserves the matrix's properties while
-    permuting its coordinate system.
-
-    Args:
-        mat_or_vec (Union[mn.Matrix4, mn.Vector3]): The input to transform, either a 4x4
-            transformation matrix or a 3D vector
-        perm (mn.Matrix3x3): The 3x3 permutation matrix to apply
-        reverse (bool, optional): If True, applies the inverse permutation by
-            transposing the permutation matrix. Defaults to False.
-
-    Returns:
-        Union[mn.Matrix4, mn.Vector3]: If the input is a Matrix4, returns a new Matrix4
-        with the permutation applied as a similarity transformation. If the input is a
-        Vector3, returns the permuted Vector3.
-
-    Notes:
-        - For matrix inputs, applies a similarity transformation of the form P*M*P^T
-        - Uses the property that for orthonormal matrices (like permutation matrices),
-          the transpose equals the inverse
-    """
-    if reverse:
-        perm = perm.transposed()
-
-    if isinstance(mat_or_vec, mn.Vector3):
-        return perm * mat_or_vec
-
-    return mn.Matrix4().from_(
-        rotation_scaling=perm @ mat_or_vec.rotation() @ perm.transposed(),
-        translation=perm * mat_or_vec.translation,
-    )
-
-
 def convert_conventions(
-    mat_or_vec: Union[mn.Matrix4, mn.Vector3], reverse: bool = False
+    mat_or_vec: Union[mn.Matrix4, mn.Vector3, np.ndarray], reverse: bool = False
 ) -> Union[mn.Matrix4, mn.Vector3]:
     """
     Convert a Matrix4 or Vector3 from Habitat convention (x=right, y=up, z=backwards)
@@ -62,16 +22,30 @@ def convert_conventions(
         Union[mn.Matrix4, mn.Vector3]: The converted matrix or vector in the target
         coordinate system. Returns the same type as the input (Matrix4 or Vector3).
     """
-    perm = mn.Matrix3x3(
-        np.array(
-            [
-                [0.0, 0.0, -1.0],  # New x comes from negated old z
-                [-1.0, 0.0, 0.0],  # New y comes from negated old x
-                [0.0, 1.0, 0.0],  # New z comes from old y
-            ]
-        )
+    if not isinstance(mat_or_vec, np.ndarray):
+        mat_or_vec_in = np.array(mat_or_vec)
+    else:
+        mat_or_vec_in = mat_or_vec
+
+    assert mat_or_vec_in.shape in [(3,), (4, 4)], "Invalid shape for input array"
+
+    perm = np.array(
+        [
+            [0.0, 0.0, -1.0],  # New x comes from negated old z
+            [-1.0, 0.0, 0.0],  # New y comes from negated old x
+            [0.0, 1.0, 0.0],  # New z comes from old y
+        ]
     )
-    return apply_permutation(mat_or_vec, perm, reverse)
+
+    if reverse:
+        perm = perm.T
+
+    if mat_or_vec_in.shape == (3,):
+        return mn.Vector3(perm @ mat_or_vec_in)
+
+    result = np.eye(4)
+    result[:3, :] = perm @ mat_or_vec_in[:3, :]
+    return mn.Matrix4(result)
 
 
 def rodrigues_rotation(
@@ -112,7 +86,7 @@ def set_robot_base_transform(robot_id, global_T_base_std: mn.Matrix4) -> None:
     robot_local_roll = rodrigues_rotation(robot_forward_axis, -np.pi / 2)
 
     # Apply the local rotation while preserving position
-    global_T_base_raw_std = mn.Matrix4.from_(
+    global_T_base_raw_std = mn.Matrix4().from_(
         # rotation_scaling=global_T_base_std.rotation() @ robot_local_roll,
         rotation_scaling=global_T_base_std.rotation(),
         translation=global_T_base_std.translation,
@@ -137,7 +111,7 @@ def get_robot_base_transform(robot_id) -> mn.Matrix4:
     robot_local_roll = rodrigues_rotation(robot_forward_axis, np.pi / 2)
 
     # Apply the local rotation while preserving position
-    global_T_base_std = mn.Matrix4.from_(
+    global_T_base_std = mn.Matrix4().from_(
         # rotation_scaling=global_T_base_raw_std.rotation() @ robot_local_roll,
         rotation_scaling=global_T_base_raw_std.rotation(),
         translation=global_T_base_raw_std.translation,
