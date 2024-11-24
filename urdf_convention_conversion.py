@@ -43,8 +43,7 @@ def main(sim):
         np.linspace(-1.5, 1.5, 150),
     ]
     window_names = ["Roll Pitch Yaw test", "XYZ test"]
-    # for idx in range(2):
-    for idx in range(0):
+    for idx in range(2):
         for axis_idx in range(3):
             for val in values[idx]:
                 global_T_base_std = (
