@@ -12,6 +12,7 @@ from utils.geometry_utils import (
     constrain_quaternion,
     generate_random_quaternion,
     get_ee_transform,
+    generate_circle_points,
 )
 from utils.sim_utils import load_robot, visualize_axes, make_configuration
 from utils.visualization_utils import add_text_to_image
@@ -68,10 +69,22 @@ def main(sim):
     goal_w, goal_v = generate_random_quaternion()
     offsets = [convert_conventions(s.translation) for s in spheres]
     spheres_2 = visualize_axes(sim)
-    while True:
+    n = 0
+    circle_index = 0
+    obj_template_mgr = sim.get_object_template_manager()
+    sphere_handle = obj_template_mgr.get_template_handles("sphereSolid")[0]
+    sphere_template = obj_template_mgr.get_template_by_handle(sphere_handle)
+    sphere_template.scale = np.array([0.1] * 3)
+    obj_template_mgr.register_template(sphere_template)
+    rigid_obj_mgr = sim.get_rigid_object_manager()
+    big_sphere = rigid_obj_mgr.add_object_by_template_handle(sphere_handle)
+    while n < 2:
         q_a = mn.Quaternion().from_matrix(get_robot_base_transform(robot).rotation())
         q_a = (q_a.scalar, np.array(q_a.vector))
-        w, v = constrain_quaternion(q_a, (goal_w, goal_v), np.radians(2))
+        if n == 0:
+            w, v = constrain_quaternion(q_a, (goal_w, goal_v), np.radians(2))
+        else:
+            w, v = constrain_quaternion(q_a, (goal_w, goal_v), np.radians(0.2))
         new_base_tf = mn.Matrix4().from_(
             mn.Quaternion(mn.Vector3(v), w).to_matrix(),
             mn.Vector3(),
@@ -80,23 +93,51 @@ def main(sim):
 
         global_T_base_std = get_robot_base_transform(robot)
         global_T_ee_std = get_ee_transform(robot)
+
         for idx, offset in enumerate(offsets):
-            spheres[idx].translation = convert_conventions(
-                global_T_base_std.transform_point(offset), reverse=True
-            )
+            if n == 0:
+                spheres[idx].translation = convert_conventions(
+                    global_T_base_std.transform_point(offset), reverse=True
+                )
+            else:
+                # Move all spheres out of the way
+                for s in spheres:
+                    s.translation = mn.Vector3(-100.0, -100.0, -100.0)
             spheres_2[idx].translation = convert_conventions(
+                global_T_ee_std.transform_point(offset), reverse=True
+            )
+
+        if n == 1:
+            num_points = 50
+            circle_index = (circle_index + 1) % num_points
+            circle_points = generate_circle_points(0.3, num_points)
+            offset = circle_points[circle_index]
+            offset = mn.Vector3(0.3, offset[0], offset[1])
+            big_sphere.translation = convert_conventions(
                 global_T_ee_std.transform_point(offset), reverse=True
             )
 
         img = sim.get_sensor_observations()["rgb_camera"]
         img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img_bgr = add_text_to_image(img_bgr, "Press 'q' to quit.")
+        if n == 1:
+            x = convert_conventions(big_sphere.translation)
+            x = global_T_ee_std.inverted().transform_point(x)
+            img_bgr = add_text_to_image(
+                img_bgr,
+                "Circle local xyz: "
+                f"{x[0]:.2f}, {x[1]:.2f}, {x[2]:.2f}",
+            )
         cv2.imshow("ee test", img_bgr)
         k = cv2.waitKey(10)
         if k == ord("q"):
-            quit()
+            n += 1
         if w == goal_w and np.array_equal(v, goal_v):
             goal_w, goal_v = generate_random_quaternion()
+    cv2.destroyAllWindows()
+
+    # Final test: keep the robot base fixed at the origin, and move a sphere in a
+    # square in front of the end effector
 
 
 if __name__ == "__main__":

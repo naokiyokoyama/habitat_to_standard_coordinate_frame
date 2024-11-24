@@ -2,7 +2,7 @@ import habitat_sim
 import magnum as mn
 import numpy as np
 import math
-from typing import Union
+from typing import Union, List, Tuple
 
 
 def convert_conventions(
@@ -284,3 +284,29 @@ def generate_random_transform():
     transform[3, 3] = 1.0
 
     return transform
+
+
+def generate_circle_points(radius: float, num_points: int) -> List[Tuple[float, float]]:
+    """
+    Generate points along a circle with given radius and number of points.
+    Points start at (0, radius) and go clockwise.
+
+    Args:
+        radius (float): Radius of the circle
+        num_points (int): Number of points to generate
+
+    Returns:
+        List[Tuple[float, float]]: List of (x, y) coordinates
+    """
+    points = []
+    angle_step = 2 * math.pi / num_points
+
+    for i in range(num_points):
+        angle = (math.pi / 2) - (i * angle_step)  # Start at (0, r) and go clockwise
+        x = radius * math.cos(angle)
+        y = radius * math.sin(angle)
+        points.append(
+            (round(x, 6), round(y, 6))
+        )  # Round to avoid floating point imprecision
+
+    return points
