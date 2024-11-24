@@ -66,7 +66,7 @@ def main(sim):
         cv2.destroyAllWindows()
 
     goal_w, goal_v = generate_random_quaternion()
-    offsets = [s.translation for s in spheres]
+    offsets = [convert_conventions(s.translation) for s in spheres]
     while True:
         q_a = mn.Quaternion().from_matrix(get_robot_base_transform(robot).rotation())
         q_a = (q_a.scalar, np.array(q_a.vector))
@@ -86,6 +86,7 @@ def main(sim):
 
         img = sim.get_sensor_observations()["rgb_camera"]
         img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_bgr = add_text_to_image(img_bgr, "Press 'q' to quit.")
         cv2.imshow("ee test", img_bgr)
         k = cv2.waitKey(10)
         if k == ord("q"):
